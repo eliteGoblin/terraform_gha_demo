@@ -1,0 +1,65 @@
+on:
+  workflow_call:
+    inputs:
+      directory:
+        required: true
+        type: string
+      aws_region:
+        type: string
+        default: 'ap-southeast-2'
+      environment:
+        required: true
+        type: string
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.8.2'
+          
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Echo inputs
+        run: echo "Directory ${{ inputs.directory }}, Environment ${{ inputs.environment }}, Region ${{ inputs.aws_region }}"
+      
+      - name: Download Terraform Plan EC2
+        uses: actions/download-artifact@v4
+        with:
+          path: plans/
+          name: ${{ inputs.directory }}-plans
+          continue-on-error: true
+
+      - name: Set artifact_found variable
+        run: |
+          if [[ -d "plans" && $(ls plans/) && -f "./plans/${{ inputs.directory }}.tfplan" ]]; then
+            echo "artifact_found=true" >> $GITHUB_ENV
+          else
+            echo "artifact_found=false" >> $GITHUB_ENV
+          fi
+      
+      - name: List all downloaded plans
+        run: |
+          pwd
+          ls .
+          ls plans/
+
+      - name: Setup AWS Credentials
+        if: env.artifact_found == 'true'
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Initialize Terraform and Terraform plan
+        if: env.artifact_found == 'true'
+        run: |
+          terraform -chdir=${{ inputs.directory }} init &&
+          terraform -chdir=${{ inputs.directory }} apply -var-file=${{ inputs.environment }}.tfvars -input=false 

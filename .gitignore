@@ -1,0 +1,28 @@
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+# *.tfstate
+# *.tfstate.*
+
+# Crash log files
+crash.log
+
+# Exclude all .tfvars files which are likely to contain sentitive data, except you want to include these
+#*.tfvars
+*.tfvars.json
+
+# Ignore override files as they are usually used to override resources locally and should not be checked in
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Ignore any .env or .sh files that may contain sensitive information such as credentials
+*.env
+*.sh
+

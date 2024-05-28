@@ -1,0 +1,93 @@
+name: Main CI/CD Workflow
+
+on:
+  push:
+    branches:
+      - nonprod
+
+jobs:
+  terraform-plan-vpc:
+    uses: ./.github/workflows/reusable_terraform_plan.yml
+    with:
+      directory: "vpc"
+      environment: nonprod
+    secrets: inherit
+
+  terraform-plan-ec2:
+    uses: ./.github/workflows/reusable_terraform_plan.yml
+    with:
+      directory: "ec2"
+      environment: nonprod
+    secrets: inherit
+
+  show-plan:
+    needs:
+      - terraform-plan-vpc
+      - terraform-plan-ec2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.8.2'
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+    
+      - name: Download Terraform Plan VPC
+        uses: actions/download-artifact@v4
+        with:
+          path: plans/
+          name: vpc-plans
+          continue-on-error: true
+
+      - name: Download Terraform Plan EC2
+        uses: actions/download-artifact@v4
+        with:
+          path: plans/
+          name: ec2-plans
+          continue-on-error: true
+      
+      - name: List all downloaded plans
+        run: |
+          pwd
+          ls .
+          ls plans/
+
+      - name: Show Terraform Plan
+        run: |
+          for plan in plans/*.tfplan.txt; do
+            if [[ -f "$plan" ]]; then
+              echo "Processing $plan"
+              echo "terraform plan for $plan"
+              echo "------------------------------------------------------------------------------------------------------------------------------------"
+              cat "$plan"
+              echo "------------------------------------------------------------------------------------------------------------------------------------"
+              # terraform show "$plan"
+            fi
+          done
+
+      - name: Manual approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          approvers: eliteGoblin
+          minimum-approvals: 1
+          issue-title: "Deploying v1.3.5 to prod from staging"
+          issue-body: "Please approve or deny the deployment of version v1.3.5."
+          exclude-workflow-initiator-as-approver: false
+          additional-approved-words: ''
+          additional-denied-words: ''
+
+  terraform-apply-vpc:
+    needs:
+      - show-plan
+    uses: ./.github/workflows/reusable_terraform_apply.yml
+    with:
+      directory: "vpc"
+      environment: nonprod
+    secrets: inherit
+
+  
